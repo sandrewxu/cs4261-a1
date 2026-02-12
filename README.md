@@ -8,6 +8,7 @@
 - `moe.py` contains the implementation in Part 4
 - `flops_analysis.py` contains the flops analysis of Parts 2, 3, and 4
 - `memory_estimator.py` contains the memory estimation of Parts 2, 3, and 4
+- `backward_analysis.py` contains the code for analysis in Part 5
 - `starter/` contains the starter code provided
 
 All code should be runnable with `uv run`.
@@ -496,4 +497,51 @@ gpt-xl (1558M)
 MoE should have roughly 8x the parameter count of MHA because it has 8x the feed-forward networks in the Transformers. In addition, FLOP count should be roughly twice that of MHA because two of the networks are running for every token. This matches our FLOPs analysis.
 
 ## Part 5: Backward Computing Analysis
-# TO-DO
+In `backward_analysis.py`, we use DFS to traverse the computational graph of a forward pass. This is the output:
+```bash
+==================================================
+Forward Pass with grad_fn Tracking
+==================================================
+
+Input shape: torch.Size([2, 8])
+Input requires_grad: False
+
+Output (logits) shape: torch.Size([2, 8, 64])
+Output grad_fn: <UnsafeViewBackward0 object at 0x10cdc22f0>
+Output requires_grad: True
+
+--------------------------------------------------
+Tracing backward through grad_fn chain:
+--------------------------------------------------
+└> UnsafeViewBackward0
+  └> MmBackward0
+    └> ViewBackward0
+      └> AddBackward0
+        └> MulBackward0
+          └> AccumulateGrad
+          ├> [branch 1]
+          └> DivBackward0
+            └> SubBackward0
+              └> AddBackward0
+                └> ViewBackward0
+                  └> AddmmBackward0
+                ├> [branch 1]
+                └> AddBackward0
+                  ├> [branch 1]
+                  └> AddBackward0
+              ├> [branch 1]
+              └> MeanBackward1
+            ├> [branch 1]
+            └> SqrtBackward0
+        ├> [branch 1]
+        └> AccumulateGrad
+    ├> [branch 1]
+    └> TBackward0
+      └> AccumulateGrad
+
+Visualization saved to: computation_graph.png
+```
+
+In addition, we use `torchviz` (note: graphviz required on system to generate picture) to generate `computation_graph.png` with the complete computation graph.
+
+![The full computation graph of a toy model, generated using torchviz in backward_analysis.py](computation_graph.png)
