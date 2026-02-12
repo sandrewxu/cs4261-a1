@@ -2,13 +2,13 @@
 ## Andrew Xu
 
 ## Submission Details
-`README.md` contains the analysis of the whole assignment, including Parts 1 and 5.
-`starter/` contains the starter code provided.
-`gqa.py` contains the implementation in Part 2.
-`mla.py` contains the implementation in Part 3.
-`moe.py` contains the implementation in Part 4.
-`flops_analysis.py` contains the flops analysis of Parts 2, 3, and 4.
-`memory_estimator.py` contains the memory estimation of Parts 2, 3, and 4.
+- `README.md` contains the analysis of the whole assignment, including Parts 1 and 5
+- `gqa.py` contains the implementation in Part 2
+- `mla.py` contains the implementation in Part 3
+- `moe.py` contains the implementation in Part 4
+- `flops_analysis.py` contains the flops analysis of Parts 2, 3, and 4
+- `memory_estimator.py` contains the memory estimation of Parts 2, 3, and 4
+- `starter/` contains the starter code provided
 
 All code should be runnable with `uv run`.
 
