@@ -1,6 +1,18 @@
 # A1: Understanding, Programming and Analysis of GPT Workload
 ## Andrew Xu
 
+## Submission Details
+`README.md` contains the analysis of the whole assignment, including Parts 1 and 5.
+`starter/` contains the starter code provided.
+`gqa.py` contains the implementation in Part 2.
+`mla.py` contains the implementation in Part 3.
+`moe.py` contains the implementation in Part 4.
+`flops_analysis.py` contains the flops analysis of Parts 2, 3, and 4.
+`memory_estimator.py` contains the memory estimation of Parts 2, 3, and 4.
+
+All code should be runnable with `uv run`.
+
+
 ## Part 1: KV Cache Analysis
 I examined `starter/gpt_with_kv_mha.py`.
 
