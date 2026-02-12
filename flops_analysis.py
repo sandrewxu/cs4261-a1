@@ -12,13 +12,15 @@ BASE_CONFIG = {
     "context_length": 1024,
     "drop_rate": 0.0,
     "qkv_bias": True,
+    "num_experts": 8,
+    "num_experts_per_tok": 2,
 }
 
 model_configs = {
-    "gpt-small (124M)": {"emb_dim": 768, "n_layers": 12, "n_heads": 12, "n_kv_groups": 3},
-    "gpt-medium (355M)": {"emb_dim": 1024, "n_layers": 24, "n_heads": 16, "n_kv_groups": 4},
-    "gpt-large (774M)": {"emb_dim": 1280, "n_layers": 36, "n_heads": 20, "n_kv_groups": 5},
-    "gpt-xl (1558M)": {"emb_dim": 1600, "n_layers": 48, "n_heads": 25, "n_kv_groups": 5},
+    "gpt-small (124M)": {"emb_dim": 768, "hidden_dim":768*4,  "n_layers": 12, "n_heads": 12, "n_kv_groups": 3, "latent_dim": 512},
+    "gpt-medium (355M)": {"emb_dim": 1024, "hidden_dim":1024*4, "n_layers": 24, "n_heads": 16, "n_kv_groups": 4, "latent_dim": 768},
+    "gpt-large (774M)": {"emb_dim": 1280, "hidden_dim":1280*4, "n_layers": 36, "n_heads": 20, "n_kv_groups": 5, "latent_dim": 960},
+    "gpt-xl (1558M)": {"emb_dim": 1600, "hidden_dim":1600*4, "n_layers": 48, "n_heads": 25, "n_kv_groups": 5, "latent_dim": 1200},
 }
 
 flops_per_second = {
@@ -37,7 +39,7 @@ flops_per_second = {
 }
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-batch_size = 2
+batch_size = 4
 input_tensor = torch.randint(0, 50257, (batch_size, 1024)).to(device)
 
 models = {
@@ -55,33 +57,27 @@ for model_name, ModelClass in models.items():
     
     for size in model_configs:
         config = {**BASE_CONFIG, **model_configs[size]}
-        
+
         model = ModelClass(config).bfloat16()
         model.to(device)
-        
+
         # MACS = multiply-accumulate operations
         # MACS are typically counted as two FLOPS (one multiply and one accumulate)
         macs, params = profile(model, inputs=(input_tensor,), verbose=False)
         flops = 2 * macs
-        
+
         print(f"\n{size}")
         print(f"  Total FLOPs: {flops:.2e}")
         print(f"  Parameters: {params/1e6:.1f}M")
-        
+
         # Calculate time for each GPU and dtype at 50% MFU
         for gpu_name, gpu_specs in flops_per_second.items():
             print(f"\n  {gpu_name} (at {int(mfu*100)}% MFU):")
             for dtype, theoretical_flops in gpu_specs.items():
                 actual_flops = theoretical_flops * mfu
                 time_seconds = flops / actual_flops
-                
+
                 dtype_name = str(dtype).split('.')[-1]
-                if time_seconds < 1:
-                    print(f"    {dtype_name:8}: {time_seconds*1000:.2f} ms")
-                elif time_seconds < 60:
-                    print(f"    {dtype_name:8}: {time_seconds:.2f} seconds")
-                else:
-                    print(f"    {dtype_name:8}: {time_seconds/60:.2f} minutes")
-        
+                print(f"    {dtype_name:8}: {time_seconds*1000:.2f} ms")
         del model
         torch.cuda.empty_cache()

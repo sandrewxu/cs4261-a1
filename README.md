@@ -147,8 +147,69 @@ Savings (GQA vs MHA): 75.00%
 We see that in KV memory, MHA takes `n_kv_groups` times more memory than GQA.
 
 ### 2.3: FLOPs estimation
-# TO-DO
+Following the given link, we implement a FLOPs estimation script in `flops_analysis.py`, estimating `n_kv_groups` for each model size. We then get float32 and float16 tensor core numbers from NVIDIA's fact sheets, to estimate the total time necessary for one forward pass with an H200 or B200 GPU. Since I do not have that hardware, I ran the script on an H100. For GQA, we get
+```bash
+================================================================================
+GQA Model Benchmarks
+================================================================================
 
+gpt-small (124M)
+  Total FLOPs: 9.25e+11
+  Parameters: 113.0M
+
+  H200 (at 50% MFU):
+    float32 : 27.61 ms
+    float16 : 0.93 ms
+    bfloat16: 0.93 ms
+
+  B200 (at 50% MFU):
+    float32 : 23.13 ms
+    float16 : 0.37 ms
+    bfloat16: 0.37 ms
+
+gpt-medium (355M)
+  Total FLOPs: 2.59e+12
+  Parameters: 315.9M
+
+  H200 (at 50% MFU):
+    float32 : 77.20 ms
+    float16 : 2.61 ms
+    bfloat16: 2.61 ms
+
+  B200 (at 50% MFU):
+    float32 : 64.66 ms
+    float16 : 1.03 ms
+    bfloat16: 1.03 ms
+
+gpt-large (774M)
+  Total FLOPs: 5.60e+12
+  Parameters: 683.9M
+
+  H200 (at 50% MFU):
+    float32 : 167.18 ms
+    float16 : 5.66 ms
+    bfloat16: 5.66 ms
+
+  B200 (at 50% MFU):
+    float32 : 140.01 ms
+    float16 : 2.24 ms
+    bfloat16: 2.24 ms
+
+gpt-xl (1558M)
+  Total FLOPs: 1.11e+13
+  Parameters: 1358.9M
+
+  H200 (at 50% MFU):
+    float32 : 332.17 ms
+    float16 : 11.25 ms
+    bfloat16: 11.25 ms
+
+  B200 (at 50% MFU):
+    float32 : 278.19 ms
+    float16 : 4.45 ms
+    bfloat16: 4.45 ms
+```
+GQA should save parameters by having less keys and value parameters. This is achieved because the parameter counts are lower than expected. There should also be a FLOPs savings compared to MHA from multiply `W_key` and `W_value` with lower dimensions.
 
 ### 2.4: Additional implementations (conceptual)
 Using **MultiHeadAttentionCombinedQKV**, our implementation does not change very much. In our combined matrix multiply, we would initialize 
@@ -271,7 +332,69 @@ Savings (MLA vs MHA): 93.75%
 We see here that the savings of MLA is `emb_dim * 2 / latent_dim`, which is 16x. This comes from the smaller, combined KV cache storage in the latent dimension.
 
 ### 3.3: FLOPs estimation
-# TO-DO
+We implement a FLOPs estimation script in `flops_analysis.py`, estimating `latent_dim` for each model size. For MLA, we get
+```bash
+================================================================================
+MLA Model Benchmarks
+================================================================================
+
+gpt-small (124M)
+  Total FLOPs: 1.01e+12
+  Parameters: 123.6M
+
+  H200 (at 50% MFU):
+    float32 : 30.21 ms
+    float16 : 1.02 ms
+    bfloat16: 1.02 ms
+
+  B200 (at 50% MFU):
+    float32 : 25.30 ms
+    float16 : 0.40 ms
+    bfloat16: 0.40 ms
+
+gpt-medium (355M)
+  Total FLOPs: 2.95e+12
+  Parameters: 360.0M
+
+  H200 (at 50% MFU):
+    float32 : 87.97 ms
+    float16 : 2.98 ms
+    bfloat16: 2.98 ms
+
+  B200 (at 50% MFU):
+    float32 : 73.68 ms
+    float16 : 1.18 ms
+    bfloat16: 1.18 ms
+
+gpt-large (774M)
+  Total FLOPs: 6.45e+12
+  Parameters: 787.3M
+
+  H200 (at 50% MFU):
+    float32 : 192.42 ms
+    float16 : 6.51 ms
+    bfloat16: 6.51 ms
+
+  B200 (at 50% MFU):
+    float32 : 161.15 ms
+    float16 : 2.58 ms
+    bfloat16: 2.58 ms
+
+gpt-xl (1558M)
+  Total FLOPs: 1.30e+13
+  Parameters: 1586.4M
+
+  H200 (at 50% MFU):
+    float32 : 387.76 ms
+    float16 : 13.13 ms
+    bfloat16: 13.13 ms
+
+  B200 (at 50% MFU):
+    float32 : 324.75 ms
+    float16 : 5.20 ms
+    bfloat16: 5.20 ms
+```
+MLA should have roughly the same number of parameters as MHA, because of the down-project and the up-project matrices. MLA should increase the FLOPs for memory efficiency gain in the KV cache, and we do see a FLOP increase compared to GQA.
 
 ## Part 4: MoE Implementation and Analysis
 ### 4.1: Implementation
@@ -293,10 +416,72 @@ for i in range(self.num_experts):
 We first flatten the topk_probs and topk_indices similar to x and out, so all tokens can get processed regardless of batch. Then, for each expert, we discover the tokens that call it as well as what position. We run the appropriate FFN on all those tokens, use the slot_idx to determine the weight of that expert on each token, and multiply them and add to the output, as desired.
 
 ### 4.2: Memory estimation
-The MoE memory estimation code based on `starter/memory_estimator.py` is implemented in `memory_estimator.py`. As the MoE modification happens after the attention layer, in the feed-forward layer, there is no memory savings with regard to the KV cache. It is the same as MHA, or whichever attention implemenetation it uses.
+The MoE memory estimation code based on `starter/memory_estimator.py` is implemented in `memory_estimator.py`. As the MoE modification happens after the attention layer, in the feed-forward layer, there is no memory savings with regard to the KV cache. It is the same as MHA, or whichever attention implementation it uses.
 
 ### 4.3: FLOPs estimation
-# TO-DO
+We implement a FLOPs estimation script in `flops_analysis.py`, estimating 8 experts and 2 activated experts for each model size. For MoE, we get
+```bash
+================================================================================
+MoE Model Benchmarks
+================================================================================
+
+gpt-small (124M)
+  Total FLOPs: 1.94e+12
+  Parameters: 746.5M
+
+  H200 (at 50% MFU):
+    float32 : 57.92 ms
+    float16 : 1.96 ms
+    bfloat16: 1.96 ms
+
+  B200 (at 50% MFU):
+    float32 : 48.51 ms
+    float16 : 0.78 ms
+    bfloat16: 0.78 ms
+
+gpt-medium (355M)
+  Total FLOPs: 6.20e+12
+  Parameters: 2568.3M
+
+  H200 (at 50% MFU):
+    float32 : 184.94 ms
+    float16 : 6.26 ms
+    bfloat16: 6.26 ms
+
+  B200 (at 50% MFU):
+    float32 : 154.89 ms
+    float16 : 2.48 ms
+    bfloat16: 2.48 ms
+
+gpt-large (774M)
+  Total FLOPs: 1.41e+13
+  Parameters: 5963.1M
+
+  H200 (at 50% MFU):
+    float32 : 419.68 ms
+    float16 : 14.21 ms
+    bfloat16: 14.21 ms
+
+  B200 (at 50% MFU):
+    float32 : 351.48 ms
+    float16 : 5.62 ms
+    bfloat16: 5.62 ms
+
+gpt-xl (1558M)
+  Total FLOPs: 2.88e+13
+  Parameters: 12369.3M
+
+  H200 (at 50% MFU):
+    float32 : 861.18 ms
+    float16 : 29.16 ms
+    bfloat16: 29.16 ms
+
+  B200 (at 50% MFU):
+    float32 : 721.24 ms
+    float16 : 11.54 ms
+    bfloat16: 11.54 ms
+```
+MoE should have roughly 8x the parameter count of MHA because it has 8x the feed-forward networks in the Transformers. In addition, FLOP count should be roughly twice that of MHA because two of the networks are running for every token. This matches our FLOPs analysis.
 
 ## Part 5: Backward Computing Analysis
 # TO-DO
